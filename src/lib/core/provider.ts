@@ -358,6 +358,16 @@ export function normalizeProviderEvent(
   };
 }
 
+/**
+ * SportyBet wraps payloads as `{ bizCode, message, data }`; older shapes used
+ * `code`. A non-10000 value means the request was rejected even though HTTP
+ * returned 200, so it must never be mistaken for a successful poll.
+ */
+export function extractBizCode(payload: unknown): number | null {
+  if (!isRecord(payload)) return null;
+  return asInteger(payload.bizCode) ?? asInteger(payload.code);
+}
+
 /** Walks an unknown payload looking for an array of event-like objects. */
 function findEventArray(payload: unknown): unknown[] | null {
   const containers = [
@@ -470,7 +480,7 @@ export class SportyBetProvider implements MatchProvider {
         );
       }
 
-      const bizCode = isRecord(payload) ? asInteger(payload.code) : null;
+      const bizCode = extractBizCode(payload);
       // 10000 is SportyBet's success envelope code.
       if (bizCode !== null && bizCode !== 10000) {
         throw new Error(

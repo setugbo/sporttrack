@@ -2,10 +2,10 @@
 
 Two supported targets:
 
-| Target      | Hosting | Poll scheduling            | Recommended for |
-| ----------- | ------- | -------------------------- | --------------- |
-| A           | Vercel  | Vercel Cron (≥ every 1 min)| CI-free hosting |
-| B           | cPanel  | Host cron (can be 30s+)    | Lower latency, exact feed window |
+| Target      | Hosting | Poll scheduling             | Recommended for |
+| ----------- | ------- | --------------------------- | --------------- |
+| A           | Vercel  | GitHub Actions (every min)  | CI-free hosting |
+| B           | cPanel  | Host cron (can be 30s+)     | Lower latency, exact feed window |
 
 Both run the same Next.js standalone server over the same PostgreSQL database
 (Neon, Supabase or any Postgres 14+). Nothing about the SportyBet feed requires
@@ -45,42 +45,33 @@ the interval is harmless and firing it less often means fewer live samples.
    npx vercel env pull
    npm run poll:once -- --start
    ```
-8. `vercel.json` installs a **once-per-minute** cron on `/api/cron/poll`.
-   Because Vercel Cron cannot run more often than once a minute but the poller
-   self-throttles to the session's 30-second interval, the effective polling
-   cadence on Vercel is **once per minute**. That is enough for correct
-   completion detection (two successful absences are just two minutes apart);
-   it only reduces how many live snapshots are available on the dashboard.
+### Scheduling: GitHub Actions (not Vercel Cron)
 
-Note on Vercel's Happy Customers / hobby plan: Cron jobs are only available on
-the Pro plan's usage model. On a hobby plan, no cron runs — instead you can
-point an external scheduler (GitHub Actions, `uptimerobot`-style ping, your own
-cron) at `https://<your-domain>/api/cron/poll` with the `Authorization: Bearer
-$CRON_SECRET` header, or simply keep relying on the manual **Poll now** button.
+Vercel **Hobby** plans only allow daily Cron jobs — a `* * * * *` entry in
+`vercel.json` is rejected at deploy time with
+`Hobby accounts are limited to daily cron jobs`. The repository is public, so
+GitHub Actions schedules are free and this is where the real scheduler lives:
+`.github/workflows/poll.yml` fires `/api/cron/poll` once per minute with
+`Authorization: Bearer $CRON_SECRET`.
 
-### GitHub Actions fallback for hobby plans
+Configure it once after the first deploy:
 
-`.github/workflows/poll.yml` (create this file) can trigger a poll every minute
-without Vercel Cron:
-
-```yaml
-name: poll
-on:
-  schedule:
-    - cron: "*/1 * * * *"
-  workflow_dispatch: {}
-jobs:
-  poll:
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          curl -fsS -X GET \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "https://YOUR-APP.vercel.app/api/cron/poll"
+```
+gh secret set CRON_SECRET --body "<same value as the Vercel CRON_SECRET>"
+gh variable set APP_URL --body "https://<your-production-domain>"
 ```
 
-Store `CRON_SECRET` as a GitHub Actions secret, matching the value you set as a
-Vercel environment variable.
+The endpoint self-throttles to the session's 30-second interval, so calling it
+more often than that is harmless; a throttled call returns immediately. Because
+Vercel Cron and Actions both fire at best once a minute, the effective cadence
+on this target is **once per minute** — enough for correct completion detection
+(two successful absences are just two minutes apart), it only reduces how many
+live snapshots are available on the dashboard.
+
+`vercel.json` deliberately contains no `crons` block; adding one on a Hobby
+plan fails the deployment. On a Pro plan you can move the schedule to Vercel
+Cron and delete the workflow, or keep both (the endpoint is idempotent and
+self-throttling).
 
 ## Target B — cPanel + Node (standalone)
 

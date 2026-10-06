@@ -1,8 +1,8 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/poll",
-      "schedule": "* * * * *"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "main": true
     }
-  ]
+  }
 }

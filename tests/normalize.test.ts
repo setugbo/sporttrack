@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  extractBizCode,
   mapProviderStatus,
   normalizeClock,
   normalizeProviderEvent,
@@ -269,5 +270,19 @@ describe('normalizeProviderEvent', () => {
       null,
     );
     expect(event?.scheduledAt).toBeNull();
+  });
+});
+
+describe('extractBizCode', () => {
+  it('reads the envelope code SportyBet actually sends', () => {
+    expect(extractBizCode({ bizCode: 10000, message: 'success', data: {} })).toBe(10000);
+    expect(extractBizCode({ code: 10000 })).toBe(10000);
+    expect(extractBizCode({ bizCode: 12301, message: 'denied' })).toBe(12301);
+  });
+
+  it('returns null when there is no envelope to read', () => {
+    expect(extractBizCode(null)).toBeNull();
+    expect(extractBizCode({ message: 'ok' })).toBeNull();
+    expect(extractBizCode('not-an-object')).toBeNull();
   });
 });

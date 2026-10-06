@@ -107,21 +107,22 @@ Then open `http://localhost:3000`.
 See `.env.example`. Notable keys:
 
 - `DATABASE_URL` — required.
-- `CRON_SECRET` — shared secret required by `/api/cron/poll` (Vercel Cron sends
-  it as `Authorization: Bearer`). Empty disables the check, which matters on
-  cPanel cron.
+- `CRON_SECRET` — shared secret required by `/api/cron/poll` (the scheduler
+  sends it as `Authorization: Bearer`). Empty disables the check, which matters
+  on cPanel cron.
 - `DEFAULT_POLL_INTERVAL` — default session cadence in seconds (10-300, default 30).
 - `DEFAULT_SOURCE_URL` — the URL `db:seed` / `poll:once` register.
 - `DISABLE_DEBUG_SCREEN` — set `1` to remove the raw-data view.
 
 ## Deployment
 
-Vercel (with Vercel Cron) and cPanel Node apps are both supported; details,
-cron setup and a first-hours checklist are in
-[`docs/deployment.md`](docs/deployment.md).
+Vercel and cPanel Node apps are both supported. On Vercel the per-minute
+schedule runs from GitHub Actions (`.github/workflows/poll.yml`) because Vercel
+Hobby plans only allow daily Cron jobs; details, first-time setup and a
+first-hours checklist are in [`docs/deployment.md`](docs/deployment.md).
 
-Vercel Cron runs at most once a minute. The recommended 30 second interval is
-only reachable on hosts that allow sub-minute scheduling (cPanel or your own
+The scheduler fires at most once a minute. The recommended 30 second interval
+is only reachable on hosts that allow sub-minute scheduling (cPanel or your own
 server). Completion detection is correct at either cadence; only live-sample
 granularity differs.
 

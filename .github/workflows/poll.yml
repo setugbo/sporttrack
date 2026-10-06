@@ -1,0 +1,40 @@
+name: poll
+
+# Vercel Hobby plans only allow daily Cron jobs, so the per-minute schedule
+# lives here instead. The repository is public, which makes Actions free.
+# The endpoint itself self-throttles to the session's poll interval, so
+# calling it more often than that is harmless.
+
+on:
+  schedule:
+    - cron: "* * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: poll
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Trigger server-side poll
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "${APP_URL}" ] || [ -z "${CRON_SECRET}" ]; then
+            echo "Set the APP_URL repository variable and CRON_SECRET secret." >&2
+            exit 1
+          fi
+          status=$(curl -sS -o body.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${APP_URL}/api/cron/poll")
+          echo "HTTP ${status}"
+          cat body.json
+          echo
+          [ "${status}" = "200" ] || exit 1
