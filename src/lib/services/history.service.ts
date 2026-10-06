@@ -142,8 +142,23 @@ export async function getHistory(
 
   // `buildHistory` merges candidates and only keeps what it needs to dedupe,
   // so the richer columns the database holds (capture time, finish reason,
-  // confidence, session) are re-attached here via the shared dedupe key.
-  const storedByDedupeKey = new Map(stored.map((row) => [row.dedupeKey, row]));
+  // confidence, session) are re-attached here. Match on `matchId`/event id:
+  // the candidates carry `sportId: null`, so their recomputed dedupe key does
+  // not equal the one the poller stored.
+  const storedByMatchId = new Map<string, StoredRow>();
+  const storedByEventId = new Map<string, StoredRow>();
+  for (const row of stored) {
+    if (row.matchId && !storedByMatchId.has(row.matchId)) {
+      storedByMatchId.set(row.matchId, row);
+    }
+    if (row.externalEventId && !storedByEventId.has(row.externalEventId)) {
+      storedByEventId.set(row.externalEventId, row);
+    }
+  }
+
+  const lookupStored = (row: { matchId: string | null; externalEventId: string | null }) =>
+    (row.matchId ? storedByMatchId.get(row.matchId) : undefined) ??
+    (row.externalEventId ? storedByEventId.get(row.externalEventId) : undefined);
 
   return {
     source: {
@@ -154,7 +169,7 @@ export async function getHistory(
     },
     rows: merged
       .slice(offset, offset + limit)
-      .map((row) => toRowFromMerged(row, storedByDedupeKey.get(row.dedupeKey))),
+      .map((row) => toRowFromMerged(row, lookupStored(row))),
     total: merged.length,
     merge: {
       appCount: report.appCount,
