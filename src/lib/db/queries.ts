@@ -363,22 +363,24 @@ export async function updateMatch(id: string, patch: MatchUpdate, sql: Sql = get
 }
 
 /**
- * Matches that are still eligible for completion detection: not terminal and
- * last seen recently enough to still be on the feed's rolling window.
+ * Matches still eligible for completion detection.
+ *
+ * Deliberately has no staleness window. A row whose `last_seen_at` is older
+ * than any window (a polling gap, a paused source) must keep flowing through
+ * absence detection, or it would sit LIVE forever with a frozen
+ * `absent_polls`. Closing a row that fell off the feed is the state machine's
+ * job — UNKNOWN or FINISHED after `maxAbsentPolls` — not a query filter's.
  */
 export async function listOpenMatches(
   sourceId: string,
-  options: { staleAfterMinutes?: number } = {},
   sql: Sql = getSql(),
 ): Promise<TrackedMatch[]> {
-  const staleAfterMinutes = options.staleAfterMinutes ?? 30;
   const rows = await sql<Record<string, unknown>[]>`
     SELECT * FROM matches
     WHERE source_id = ${sourceId}
       -- UNKNOWN is a decided outcome (no further evidence can change it), so
       -- only still-open lifecycles are re-examined on each poll.
       AND status IN ('DISCOVERED', 'LIVE')
-      AND last_seen_at > now() - (${staleAfterMinutes} || ' minutes')::interval
     ORDER BY last_seen_at DESC
   `;
   return rows.map(toTrackedMatch);

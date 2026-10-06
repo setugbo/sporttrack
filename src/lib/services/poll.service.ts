@@ -356,7 +356,7 @@ export async function ingestSnapshot(
   // successful poll are advanced. A failed poll never reaches this code path,
   // which is what keeps a transient outage from fabricating completions.
   // -------------------------------------------------------------------------
-  const openMatches = await listOpenMatches(options.source.id, {}, sql);
+  const openMatches = await listOpenMatches(options.source.id, sql);
   for (const match of openMatches) {
     if (seenMatchIds.has(match.id)) continue;
     if (options.session && !options.session.trackAll && !targetSet.has(match.id)) {
