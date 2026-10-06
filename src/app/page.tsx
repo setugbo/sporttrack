@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { AutoPollControl } from '@/components/AutoPollControl';
 import { PollNowButton } from '@/components/PollNowButton';
 import {
   Empty,
@@ -114,7 +115,10 @@ export default async function DashboardPage() {
               <div style={{ fontWeight: 600 }}>{source.name}</div>
               <div className="mono faint">{source.sourceUrl}</div>
             </div>
-            <PollNowButton url={source.sourceUrl} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <PollNowButton url={source.sourceUrl} />
+              <AutoPollControl url={source.sourceUrl} />
+            </div>
           </div>
           <div className="grid cols-4" style={{ marginTop: 4 }}>
             <Stat

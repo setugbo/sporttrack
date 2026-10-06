@@ -74,6 +74,12 @@ works immediately. Verify with
 a nonzero `total_count`, trigger the workflow manually
 (`gh workflow run poll`) or use the dashboard's **Poll now** button.
 
+While the scheduler is warming up (or any time the dashboard is open), the
+**Auto-poll** toggle on the dashboard posts to `/api/poll` every 30 seconds from
+the browser — same origin, so no cron secret in the client, and the upstream
+call stays server-side. It pauses when the tab is hidden, skips refreshes the
+server throttled, and remembers your choice in `localStorage`.
+
 Completion detection is correct at any cadence — absences only accrue on
 successful polls, so a long gap delays completions but never fakes them. What
 the cadence changes is how many live snapshots land in the database.
