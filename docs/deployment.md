@@ -67,6 +67,13 @@ gh secret set CRON_SECRET --body "<same value as the Vercel CRON_SECRET>"
 gh variable set APP_URL --body "https://<your-production-domain>"
 ```
 
+First-run note: on a brand-new repository GitHub's scheduler can take a while
+(hours) before it starts creating `schedule` events, while `workflow_dispatch`
+works immediately. Verify with
+`gh api "repos/<owner>/<repo>/actions/runs?event=schedule"` — until it returns
+a nonzero `total_count`, trigger the workflow manually
+(`gh workflow run poll`) or use the dashboard's **Poll now** button.
+
 Completion detection is correct at any cadence — absences only accrue on
 successful polls, so a long gap delays completions but never fakes them. What
 the cadence changes is how many live snapshots land in the database.

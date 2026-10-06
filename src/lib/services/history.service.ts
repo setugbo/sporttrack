@@ -40,9 +40,9 @@ export interface HistoryResponse {
   };
 }
 
-function toRow(
-  row: Awaited<ReturnType<typeof queryHistoricalResults>>[number],
-): HistoricalResultRow {
+type StoredRow = Awaited<ReturnType<typeof queryHistoricalResults>>[number];
+
+function toRow(row: StoredRow): HistoricalResultRow {
   return {
     id: row.id,
     matchId: row.matchId,
@@ -72,8 +72,10 @@ export async function getHistory(
   const provider = createSportyBetProvider();
   const descriptor = descriptorFromSource(source);
 
+  // The caller's offset is applied to the merged set below, not to this page;
+  // passing it through would skip rows twice for any offset > 0.
   const stored = await queryHistoricalResults(
-    { ...query, sourceId: source.id, limit: 500 },
+    { ...query, sourceId: source.id, limit: 500, offset: 0 },
     sql,
   );
 
@@ -138,6 +140,11 @@ export async function getHistory(
   const limit = Math.min(query.limit ?? 100, 500);
   const offset = query.offset ?? 0;
 
+  // `buildHistory` merges candidates and only keeps what it needs to dedupe,
+  // so the richer columns the database holds (capture time, finish reason,
+  // confidence, session) are re-attached here via the shared dedupe key.
+  const storedByDedupeKey = new Map(stored.map((row) => [row.dedupeKey, row]));
+
   return {
     source: {
       id: source.id,
@@ -145,7 +152,9 @@ export async function getHistory(
       sourceUrl: source.sourceUrl,
       historicalMode: source.historicalMode,
     },
-    rows: merged.slice(offset, offset + limit).map(toRowFromMerged),
+    rows: merged
+      .slice(offset, offset + limit)
+      .map((row) => toRowFromMerged(row, storedByDedupeKey.get(row.dedupeKey))),
     total: merged.length,
     merge: {
       appCount: report.appCount,
@@ -159,22 +168,28 @@ export async function getHistory(
   };
 }
 
-function toRowFromMerged(row: {
-  matchId: string | null;
-  sourceId?: string;
-  externalEventId: string | null;
-  source: ResultSource;
-  homeTeam: string;
-  awayTeam: string;
-  homeScore: number;
-  awayScore: number;
-  leagueId: string | null;
-  playedAt: Date | null;
-}): HistoricalResultRow {
+function toRowFromMerged(
+  row: {
+    matchId: string | null;
+    sourceId?: string;
+    externalEventId: string | null;
+    source: ResultSource;
+    homeTeam: string;
+    awayTeam: string;
+    homeScore: number;
+    awayScore: number;
+    leagueId: string | null;
+    playedAt: Date | null;
+  },
+  storedRow?: StoredRow,
+): HistoricalResultRow {
   return {
-    id: row.matchId ?? `${row.source}-${row.externalEventId ?? `${row.homeTeam}-${row.awayTeam}`}`,
+    id:
+      storedRow?.id ??
+      row.matchId ??
+      `${row.source}-${row.externalEventId ?? `${row.homeTeam}-${row.awayTeam}`}`,
     matchId: row.matchId,
-    sourceId: row.sourceId ?? '',
+    sourceId: storedRow?.sourceId ?? row.sourceId ?? '',
     externalEventId: row.externalEventId,
     source: row.source,
     homeTeam: row.homeTeam,
@@ -182,11 +197,13 @@ function toRowFromMerged(row: {
     homeScore: row.homeScore,
     awayScore: row.awayScore,
     leagueId: row.leagueId,
-    leagueName: null,
+    leagueName: storedRow?.leagueName ?? null,
     playedAt: row.playedAt ? row.playedAt.toISOString() : null,
-    capturedAt: (row.playedAt ?? new Date()).toISOString(),
-    trackingSessionId: null,
-    finishReason: null,
-    finishConfidence: null,
+    capturedAt: (storedRow?.capturedAt ?? row.playedAt ?? new Date()).toISOString(),
+    trackingSessionId: storedRow?.trackingSessionId ?? null,
+    finishReason: (storedRow?.finishReason ??
+      null) as HistoricalResultRow['finishReason'],
+    finishConfidence: (storedRow?.finishConfidence ??
+      null) as HistoricalResultRow['finishConfidence'],
   };
 }
