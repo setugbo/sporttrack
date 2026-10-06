@@ -116,15 +116,15 @@ See `.env.example`. Notable keys:
 
 ## Deployment
 
-Vercel and cPanel Node apps are both supported. On Vercel the per-minute
-schedule runs from GitHub Actions (`.github/workflows/poll.yml`) because Vercel
-Hobby plans only allow daily Cron jobs; details, first-time setup and a
-first-hours checklist are in [`docs/deployment.md`](docs/deployment.md).
+Vercel and cPanel Node apps are both supported. On Vercel the schedule runs
+from GitHub Actions (`.github/workflows/poll.yml`, a 30-second loop inside a
+5-minute schedule) because Vercel Hobby plans only allow daily Cron jobs and
+GitHub allows at best one scheduled run per 5 minutes; details, first-time
+setup and a first-hours checklist are in
+[`docs/deployment.md`](docs/deployment.md).
 
-The scheduler fires at most once a minute. The recommended 30 second interval
-is only reachable on hosts that allow sub-minute scheduling (cPanel or your own
-server). Completion detection is correct at either cadence; only live-sample
-granularity differs.
+Completion detection is correct at any cadence; only live-sample granularity
+differs.
 
 ## Data model
 

@@ -1,13 +1,18 @@
 name: poll
 
-# Vercel Hobby plans only allow daily Cron jobs, so the per-minute schedule
-# lives here instead. The repository is public, which makes Actions free.
-# The endpoint itself self-throttles to the session's poll interval, so
-# calling it more often than that is harmless.
+# Vercel Hobby plans only allow daily Cron jobs, so scheduling lives here.
+# The repository is public, which makes Actions free.
+#
+# GitHub's shortest scheduled interval is 5 minutes, so each run holds the
+# cadence by calling /api/cron/poll every 30 seconds for ~4.5 minutes; the
+# endpoint self-throttles to the session's interval anyway, so extra calls
+# return immediately. Set APP_URL and CRON_SECRET as repository config:
+#   gh variable set APP_URL --body "https://<production-domain>"
+#   gh secret set CRON_SECRET --body "<same value as Vercel CRON_SECRET>"
 
 on:
   schedule:
-    - cron: "* * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -20,9 +25,9 @@ concurrency:
 jobs:
   poll:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 8
     steps:
-      - name: Trigger server-side poll
+      - name: Poll every 30 seconds
         env:
           APP_URL: ${{ vars.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
@@ -31,10 +36,30 @@ jobs:
             echo "Set the APP_URL repository variable and CRON_SECRET secret." >&2
             exit 1
           fi
-          status=$(curl -sS -o body.json -w "%{http_code}" \
-            -H "Authorization: Bearer ${CRON_SECRET}" \
-            "${APP_URL}/api/cron/poll")
-          echo "HTTP ${status}"
-          cat body.json
-          echo
-          [ "${status}" = "200" ] || exit 1
+
+          endpoint="${APP_URL%/}/api/cron/poll"
+          deadline=$(( $(date +%s) + 270 ))
+          attempts=0
+          failures=0
+
+          while [ "$(date +%s)" -lt "${deadline}" ]; do
+            attempts=$((attempts + 1))
+            if status=$(curl -sS -o body.json -w "%{http_code}" \
+                 -H "Authorization: Bearer ${CRON_SECRET}" "${endpoint}"); then
+              :
+            else
+              status=000
+            fi
+            echo "attempt ${attempts}: HTTP ${status}"
+            if [ -s body.json ]; then head -c 400 body.json; echo; fi
+            [ "${status}" = "200" ] || failures=$((failures + 1))
+            [ "$(date +%s)" -lt "${deadline}" ] || break
+            sleep 30
+          done
+
+          # Every call failing means auth or routing is broken — surface it.
+          if [ "${attempts}" -gt 0 ] && [ "${failures}" -eq "${attempts}" ]; then
+            echo "All ${attempts} calls failed." >&2
+            exit 1
+          fi
+          echo "completed ${attempts} calls (${failures} failed)"

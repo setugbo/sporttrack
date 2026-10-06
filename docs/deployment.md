@@ -4,7 +4,7 @@ Two supported targets:
 
 | Target      | Hosting | Poll scheduling             | Recommended for |
 | ----------- | ------- | --------------------------- | --------------- |
-| A           | Vercel  | GitHub Actions (every min)  | CI-free hosting |
+| A           | Vercel  | GitHub Actions (30s loop)   | CI-free hosting |
 | B           | cPanel  | Host cron (can be 30s+)     | Lower latency, exact feed window |
 
 Both run the same Next.js standalone server over the same PostgreSQL database
@@ -51,7 +51,13 @@ Vercel **Hobby** plans only allow daily Cron jobs — a `* * * * *` entry in
 `vercel.json` is rejected at deploy time with
 `Hobby accounts are limited to daily cron jobs`. The repository is public, so
 GitHub Actions schedules are free and this is where the real scheduler lives:
-`.github/workflows/poll.yml` fires `/api/cron/poll` once per minute with
+`.github/workflows/poll.yml`.
+
+GitHub's shortest scheduled interval is **five minutes**, so each run calls
+`/api/cron/poll` **every 30 seconds for ~4.5 minutes**, giving an effective
+30-second cadence within a run and at worst a five-minute gap between runs.
+The endpoint self-throttles to the session's interval anyway, so redundant
+calls return immediately. Every call carries
 `Authorization: Bearer $CRON_SECRET`.
 
 Configure it once after the first deploy:
@@ -61,17 +67,14 @@ gh secret set CRON_SECRET --body "<same value as the Vercel CRON_SECRET>"
 gh variable set APP_URL --body "https://<your-production-domain>"
 ```
 
-The endpoint self-throttles to the session's 30-second interval, so calling it
-more often than that is harmless; a throttled call returns immediately. Because
-Vercel Cron and Actions both fire at best once a minute, the effective cadence
-on this target is **once per minute** — enough for correct completion detection
-(two successful absences are just two minutes apart), it only reduces how many
-live snapshots are available on the dashboard.
+Completion detection is correct at any cadence — absences only accrue on
+successful polls, so a long gap delays completions but never fakes them. What
+the cadence changes is how many live snapshots land in the database.
 
 `vercel.json` deliberately contains no `crons` block; adding one on a Hobby
 plan fails the deployment. On a Pro plan you can move the schedule to Vercel
-Cron and delete the workflow, or keep both (the endpoint is idempotent and
-self-throttling).
+Cron (once per minute) and delete the workflow, or keep both — the endpoint is
+idempotent and self-throttling.
 
 ## Target B — cPanel + Node (standalone)
 
