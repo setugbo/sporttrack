@@ -75,6 +75,8 @@ export function AutoPollControl({ url }: { url: string }) {
       }
     }
 
+    // Poll immediately on mount so the view catches up, then keep it warm.
+    void tick();
     const id = window.setInterval(() => {
       void tick();
     }, INTERVAL_MS);

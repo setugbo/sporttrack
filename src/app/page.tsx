@@ -15,8 +15,10 @@ import { checkDatabase } from '@/lib/db/client';
 import { listActiveMatches, listSources } from '@/lib/db/queries';
 import { getAnalysis } from '@/lib/services/analysis.service';
 import { getHistory } from '@/lib/services/history.service';
+import { pollAllSources } from '@/lib/services/tracker.service';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 /**
  * Operational dashboard: connection state, live slate, collected history and
@@ -47,6 +49,16 @@ export default async function DashboardPage() {
         </div>
       </>
     );
+  }
+
+  // Open the dashboard, get a fresh picture: a render-time poll (self-throttled
+  // to the session interval, so repeat renders are free) keeps the slate and
+  // recorded results as recent as possible whenever the page is checked. A
+  // failed poll must not block the view — the previous data is still useful.
+  try {
+    await pollAllSources();
+  } catch {
+    // Stale data on the screen is better than an error page.
   }
 
   const sources = await listSources();
